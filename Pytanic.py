@@ -14,12 +14,13 @@ def test():
     B_attr = "status"
     B_value = 1
     
-    for attr in "sex", "clas", "port":
+    for attr in "sex", "clas", "port", "status":
         for value in get_attr_opt(attr):
-            for B_attr in "sex", "clas", "port":
-                for B_value in get_attr_opt(attr):
-                    proba = get_cond_proba(Tripulation,attr,value, B_attr,B_value)   
-                    print "Probability of "+B_attr+" being "+ str(B_value)+" given that "+ attr + " is ", value, " = ", proba
+            for B_attr in "sex", "clas", "port", "status":
+                if attr != B_attr:
+                    for B_value in get_attr_opt(B_attr):
+                        proba = get_cond_proba(Tripulation,attr,value, B_attr,B_value)   
+                        print "Probability of "+attr+" being "+ str(value)+" given that "+ B_attr + " is ", B_value, " = ", proba
  
 def get_cond_proba(Tripulation, A_field,A_value, B_field, B_value):
     """ Get conditional Probability of A, given B"""
@@ -29,10 +30,10 @@ def get_cond_proba(Tripulation, A_field,A_value, B_field, B_value):
     n_A_B = 0
     for guy in Tripulation:
         n_tot += 1 
-        if(guy.get_attr(A_field) == A_value): # Check B Male
+        if(guy.get_attr(B_field) == B_value): # Check B 
             n_B += 1
              
-            if(guy.get_attr(B_field) == B_value): # Check A Survival
+            if(guy.get_attr(A_field) == A_value): # Check A 
                 
                 n_A_B += 1 
 
@@ -123,6 +124,7 @@ def get_attr_opt(name_of_attr):
         options = [0,1]
     if (name_of_attr == "port"):
         options = ["Q","S","C"]
+      
 
     return options
 

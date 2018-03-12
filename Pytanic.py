@@ -1,27 +1,87 @@
+attr_list = ["sex", "clas", "port", "age_group", "siblings_group","parents_group"]
+label = "status" 
 def main():
-    """ Main Program"""
-    # First: Read Data. 
-    #Define object person with atributes (Age, Sex, Ticket, etc)
+    """ Descision Tree Main Program"""
+    # 1) Configuration: Set attributes, label
+    # 2) First: Read Data
+    #Tripulation = read_data("train.csv")
+    # 3) Train Model
+    # 4) Predict
 
-    # Some Data Analysis: Get conditional probabilities ( Prob(surv|fem) , Prob(surv|clas==1), etc
+def train(data,q_ls=[],a_ls=[],forb_attr=0):
+    """ Train with data set"""
+    import copy 
+
+    if len(data) < 20:
+        return q_ls, a_ls
+
+    data_local = copy.copy(data) 
+    attr = label    
+    value = 0
+
+    prior_proba = get_proba(data_local, attr, value)    
+  
+    best_new_info = 0. 
+    
+    for B_attr in attr_list:
+        if B_attr == forb_attr :
+            continue
+        for B_value in get_attr_opt(B_attr):            
+            new_info = ( get_cond_proba(data_local,attr,value, B_attr,B_value) - prior_proba) **2         
+            #print "Probability of "+attr+" being "+ str(value)+" given that "+ B_attr + " is ", B_value, " = ", proba
  
+            if new_info > best_new_info :
+                best_new_info = new_info 
+                best_ques = B_attr
+                best_answ = B_value
+                      
+    print "best question ", best_ques
+    print "best answer " , best_answ           
+    print "best new info" , best_new_info
+
+    q_ls.append(best_ques)
+    a_ls.append(best_answ)
+
+    # Generate 2 lists, dividing wether the attribute "best_ques" is best_answ or not
+    data_1 = []
+    data_2 = []
+    for instance in data:
+        if instance.get_attr(best_ques) == best_answ :
+            data_1.append(instance)
+        else : 
+            data_2.append(instance)
+
+    print "len(data_1)" , len(data_1)
+    print "len(data_2)" , len(data_2)
+
+    train(data_1,q_ls,a_ls,best_ques)
+
 def test():
     """Test space to do stuff"""
   
     #Read data. Tripulation is a list with Persons (Class defined below) 
     Tripulation = read_data("train.csv")
     
-    B_attr = "status"
-    B_value = 1
-    
-    for attr in "sex", "clas", "port", "status":
-        for value in get_attr_opt(attr):
-            for B_attr in "sex", "clas", "port", "status":
-                if attr != B_attr:
-                    for B_value in get_attr_opt(B_attr):
-                        proba = get_cond_proba(Tripulation,attr,value, B_attr,B_value)   
-                        print "Probability of "+attr+" being "+ str(value)+" given that "+ B_attr + " is ", B_value, " = ", proba
- 
+    train(Tripulation)
+
+def get_proba(data, field, value):
+    """ Estimate probability from data of field being == value """
+
+    n_tot = 0
+    n_A = 0
+
+    for guy in data:
+        n_tot += 1
+        if(guy.get_attr(field) == value): # Check A
+            n_A += 1
+
+    if n_tot > 0:
+        proba = float(n_A) / float(n_tot)
+    else:
+        proba = 0.
+
+    return proba
+
 def get_cond_proba(Tripulation, A_field,A_value, B_field, B_value):
     """ Get conditional Probability of A, given B"""
     n_tot = 0
@@ -36,8 +96,11 @@ def get_cond_proba(Tripulation, A_field,A_value, B_field, B_value):
             if(guy.get_attr(A_field) == A_value): # Check A 
                 
                 n_A_B += 1 
-
-    proba_A_given_B = float(n_A_B) / float(n_B)
+    
+    if n_B > 0:
+        proba_A_given_B = float(n_A_B) / float(n_B)
+    else:
+        proba_A_given_B = 0.
 
     return proba_A_given_B
 
@@ -107,6 +170,40 @@ class Person:
         self.cabin = Cabin # Cabin Number
         self.port = Embarked # C = Cherbourg, Q = Queenstown, S = Southampton
  
+        # Set categories for age. Bound variables to have discrete attributes
+        if self.age < 5 : 
+            self.age_group = "A"
+        elif self.age > 5 and self.age < 12 : 
+            self.age_group = "B"
+        elif self.age > 12 and self.age < 18 : 
+            self.age_group = "C"
+        elif self.age > 18 and self.age < 60 :
+            self.age_group = "D"
+        elif self.age > 60 :
+            self.age_group = "E"
+        else :
+            self.age_group = "NaN"
+
+        # Set categories for parents. Bound variables to have discrete attributes
+        if self.parents == 0 :
+            self.parents_group = "A"
+        elif self.parents == 1 : 
+            self.parents_group = "B"
+        elif self.parents == 2 : 
+            self.parents_group = "C"
+        elif self.parents > 2 : 
+            self.parents_group = "D"
+
+        # Set categories for siblings. Bound variables to have discrete attributes
+        if self.siblings == 0 :
+            self.siblings_group = "A"
+        elif self.siblings == 1 : 
+            self.siblings_group = "B"
+        elif self.siblings == 2 : 
+            self.siblings_group = "C"
+        elif self.siblings > 2 : 
+            self.siblings_group = "D"
+
     def get_attr(self,name_of_attr):
         """ Define a method thar returns the desired attribute name_of_attr, passed as a string""" 
         for attri, value in self.__dict__.iteritems():
@@ -124,8 +221,16 @@ def get_attr_opt(name_of_attr):
         options = [0,1]
     if (name_of_attr == "port"):
         options = ["Q","S","C"]
-      
-
+    if (name_of_attr == "siblings"):
+        options = ["A","B","C"]
+    if (name_of_attr == "parents"):
+        options = ["A","B","C"]
+    if (name_of_attr == "age_group"):
+        options = ["A","B","C","D","E","NaN"]
+    if (name_of_attr == "siblings_group"):
+        options = ["A","B","C","D"]
+    if (name_of_attr == "parents_group"):
+        options = ["A","B","C","D"]
     return options
 
 

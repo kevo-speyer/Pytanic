@@ -8,6 +8,175 @@ def main():
     # 3) Train Model
     # 4) Predict
 
+def test():
+    """Test space to do stuff"""
+  
+    #Read data. Tripulation is a list with Persons (Class defined below) 
+    tripulation = read_data("train.csv")
+    
+    #Train model
+    n_data = len(tripulation) # Set a global variable
+    # Build tree
+    tree = build_tree(tripulation, n_data) # Train data
+
+    #for branch in tree:
+        #print "branch.ques,branch.answ,branch.pos, branch.t_br, branch.f_br"
+        #print branch.ques,branch.answ,branch.pos, branch.t_br, branch.f_br
+
+    #Predict on test set
+    #test_set = read_test_set("test.csv")
+    n_corr = 0
+    for guy in tripulation :
+        prediction = predict_single(guy,tree)
+        if int(2*(1.-prediction)) == guy.get_attr("status") :
+            n_corr += 1
+
+    print "Correctly predicted precetage of deaths:", float(n_corr) / float(n_data)
+
+    
+def predict_single(person, tree):
+    """ use the decision tree to predict the status of one person"""
+    
+    ques = 1
+    node = 0
+    while ques != 0:
+        for branch in tree:
+            #print branch.pos,node
+            if branch.pos == node:
+                ques = branch.ques
+                if person.get_attr(branch.ques) == branch.answ :
+                    node = branch.t_br
+                else :
+                    node = branch.f_br
+                break
+        death_proba = branch.death_proba
+    return death_proba
+       
+
+def build_tree(data, init_pop, node_num = 0,tree = []):
+    """ Build a Descicion tree """
+ 
+    # Check if this node ends here or has ramifications
+    end_branch = check_end_branch(data, init_pop)
+
+    death_proba = get_proba(data, "status", 0)
+    if end_branch == True :
+        # If it ends here, save probability of dead for this leaf
+        #death_proba = get_proba(data, "status", 0)
+        true_node_num = 0 # Set the branches to 0 indicates that the Node is terminal
+        false_node_num = 0 # and it has no new branches
+        best_ques = 0
+        best_answ = 0 
+    else:  # If it does not end here, then
+        # get best question and answer
+        best_ques, best_answ = get_best_split(data) 
+        if best_ques == 0: 
+            #death_proba = get_proba(data, "status", 0)
+            true_node_num = 0 # Set the branches to 0 indicates that the Node is terminal
+            false_node_num = 0 # and it has no new branches
+            best_ques = 0
+            best_answ = 0 
+            end_branch = True
+        else:      
+            # Slice data in two groups: 
+            # 1) best_ques == best_anse => True_data
+            # 2) best_quest != best_answ => False_data
+            true_data, false_data = split_data(data, best_ques, best_answ)
+                
+        #give each new node an ID
+        last_node = len(tree)
+        true_node_num = last_node + 1
+        false_node_num = last_node + 2
+  
+    #DEBUG
+    #print "best_ques, best_answ, node_num, true_node_num, false_node_num"
+    #print best_ques, best_answ, node_num, true_node_num, false_node_num
+    #/DEBUG
+ 
+    new_node = Node(best_ques, best_answ, node_num, true_node_num, false_node_num, death_proba)
+
+    if end_branch == True :
+        #print "BRANCH ENDED, DEATH PROBA:"
+        new_node.death_proba = death_proba    
+        #print new_node.death_proba
+    
+    tree.append(new_node)
+
+    if end_branch == False:
+        # Recursively Generate new nodes in the tree
+        tree = build_tree(true_data, init_pop, true_node_num, tree)
+        tree = build_tree(false_data, init_pop, false_node_num, tree)
+
+    return tree
+
+class Node:
+    """ This is a branch a of tree. A tree is build of Nodes """
+    def __init__(self,ques, answ, pos, true_branch, false_branch, d_prb): 
+        self.ques = ques
+        self.answ = answ 
+        self.pos = pos # position on the tree list of Nodes
+        self.t_br = true_branch
+        self.f_br = false_branch
+        self.death_proba = d_prb
+
+
+def split_data(data, ques, answ):
+    """This routine splits the data, given a question and an answer"""
+    true_data = []
+    false_data = []
+    for instance in data:
+        if instance.get_attr(ques) == answ :
+            true_data.append(instance)
+        else :  
+            false_data.append(instance) 
+
+    return true_data, false_data  
+ 
+def get_best_split(data):
+    """ Get the attribute and attribute option to split in the best possible way the data into two groups"""
+    best_gini_split = 0.
+    best_ques = 0
+    best_answ = 0
+    init_gini = get_gini(data) 
+    for B_attr in attr_list:
+        for B_value in get_attr_opt(B_attr):
+            p_t = get_proba(data, B_attr, B_value) 
+            p_f = 1. - p_t           
+
+            gini_true =  get_cond_proba(data,"status",0, B_attr,B_value)  
+            gini_true = 2. * gini_true * ( 1. - gini_true )
+            
+            gini_false =  get_cond_proba_false(data,"status",0, B_attr,B_value)
+            gini_false = 2. * gini_false * ( 1. - gini_false )
+
+            gini_split = init_gini - p_t * gini_true - p_f * gini_false
+            if gini_split > best_gini_split :
+                best_gini_split = gini_split
+                best_ques = B_attr
+                best_answ = B_value
+    
+    
+    return best_ques, best_answ
+
+def get_gini(data):
+    """ Gets the Gini coefficient of a population"""
+    proba = get_proba(data, "status", 0)
+    gini_coef = 2.*proba*(1.-proba)
+    return gini_coef
+
+def check_end_branch(data, init_pop):
+    """ This is the criterion to determine if the branch ends here (leaf) or not"""
+
+    current_population = len(data) 
+    pop_fract =  float(current_population) / float(init_pop)
+    
+    if pop_fract < 0.1 : #If branch has less than 0.1 of the total population, end leaf
+        rta = True
+    else:
+        rta = False
+
+    return rta
+
 def train(data,q_ls=[],a_ls=[],forb_attr=0):
     """ Train with data set"""
     import copy 
@@ -35,9 +204,9 @@ def train(data,q_ls=[],a_ls=[],forb_attr=0):
                 best_ques = B_attr
                 best_answ = B_value
                       
-    print "best question ", best_ques
-    print "best answer " , best_answ           
-    print "best new info" , best_new_info
+    #print "best question ", best_ques
+    #print "best answer " , best_answ           
+    #print "best new info" , best_new_info
 
     q_ls.append(best_ques)
     a_ls.append(best_answ)
@@ -51,18 +220,11 @@ def train(data,q_ls=[],a_ls=[],forb_attr=0):
         else : 
             data_2.append(instance)
 
-    print "len(data_1)" , len(data_1)
-    print "len(data_2)" , len(data_2)
+    #print "len(data_1)" , len(data_1)
+    #print "len(data_2)" , len(data_2)
 
     train(data_1,q_ls,a_ls,best_ques)
 
-def test():
-    """Test space to do stuff"""
-  
-    #Read data. Tripulation is a list with Persons (Class defined below) 
-    Tripulation = read_data("train.csv")
-    
-    train(Tripulation)
 
 def get_proba(data, field, value):
     """ Estimate probability from data of field being == value """
@@ -103,6 +265,31 @@ def get_cond_proba(Tripulation, A_field,A_value, B_field, B_value):
         proba_A_given_B = 0.
 
     return proba_A_given_B
+
+def get_cond_proba_false(Tripulation, A_field,A_value, B_field, B_value):
+    """ Get conditional Probability of A, given (not B)"""
+    n_tot = 0
+    n_A = 0
+    n_B = 0
+    n_A_B = 0
+    for guy in Tripulation:
+        n_tot += 1 
+        if(guy.get_attr(B_field) != B_value): # Check B 
+            n_B += 1
+             
+            if(guy.get_attr(A_field) == A_value): # Check A 
+                
+                n_A_B += 1 
+    
+    if n_B > 0:
+        proba_A_given_B = float(n_A_B) / float(n_B)
+    else:
+        proba_A_given_B = 0.
+
+    return proba_A_given_B
+
+
+
 
 def read_data(in_file):
     """Read data from input file, and Create and fill list of Persons
